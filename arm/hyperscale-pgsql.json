@@ -1,0 +1,119 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "administratorLogin": {
+            "type": "string"
+        },
+        "administratorLoginPassword": {
+            "type": "securestring"
+        },
+        "location": {
+            "type": "string"
+        },
+        "serverGroup": {
+            "type": "string"
+        },
+        "coordName": {
+            "type": "string"
+        },
+        "coordinatorVcores": {
+            "type": "string"
+        },
+        "coordinatorStorageSizeMB": {
+            "type": "string"
+        },
+        "workerVcores": {
+            "type": "string"
+        },
+        "workerStorageSizeMB": {
+            "type": "string"
+        },
+        "numWorkers": {
+            "type": "int",
+            "defaultValue": 2
+        },
+        "vnetData": {
+            "type": "object",
+            "defaultValue": {}
+        },
+        "standbyCount": {
+            "type": "int",
+            "defaultValue": 0
+        }
+    },
+    "variables": {
+        "api": "2018-03-29-privatepreview",
+        "serverGroupName": "[parameters('serverGroup')]",
+        "coordName": "[parameters('coordName')]",
+        "serverSuffix": "[parameters('serverGroup')]",
+        "publicIpAddressRequested": "[if(empty(parameters('vnetData')), bool('true'), bool('false'))]",
+        "vnetDataSet": "[if(empty(parameters('vnetData')), json('{ \"vnetId\": \"\", \"vnetName\": \"\", \"subnetName\": \"\" }'), parameters('vnetData'))]",
+        "finalVnetData": "[json(concat('{ \"DelegatedVnetID\": \"', variables('vnetDataSet').vnetId, '\", \"DelegatedVnetName\": \"', variables('vnetDataSet').vnetName, '\", \"DelegatedSubnetName\": \"', variables('vnetDataSet').subnetName, '\", \"DelegatedNetworkSpace\": \"\"}'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.DBforPostgreSQL/serverGroups",
+            "apiVersion": "[variables('api')]",
+            "location": "[parameters('location')]",
+            "name": "[variables('serverGroupName')]",
+            "Properties": {
+                "Mode": "citus"
+            }
+        },
+        {
+            "type": "Microsoft.DBforPostgreSQL/serversv2",
+            "apiVersion": "[variables('api')]",
+            "location": "[parameters('location')]",
+            "name": "[variables('coordName')]",
+            "properties": {
+                "version": "11",
+                "Role": "Coordinator",
+                "administratorLogin": "citus",
+                "administratorLoginPassword": "[parameters('administratorLoginPassword')]",
+                "publicIpAddressRequested": "[variables('publicIpAddressRequested')]",
+                "serverEdition": "GeneralPurpose",
+                "VCores": "[parameters('coordinatorVcores')]",
+                "storageQuotaInMb": "[parameters('workerStorageSizeMB')]",
+                "serverGroupName": "[variables('serverGroupName')]",
+                "standbyCount": "[parameters('standbyCount')]",
+                "VnetInjArgs": "[if(empty(parameters('vnetData')), json('null'), variables('finalVnetData'))]"
+            },
+            "dependsOn": [
+                "[concat('Microsoft.DBforPostgreSQL/serverGroups/', variables('serverGroupName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.DBforPostgreSQL/serversv2",
+            "apiVersion": "[variables('api')]",
+            "location": "[parameters('location')]",
+            "copy": {
+                "name": "worker",
+                "count": "[parameters('numWorkers')]"
+            },
+            "name": "[concat(variables('serverSuffix'), '-', 'worker', copyIndex())]",
+            "properties": {
+                "version": "11",
+                "Role": "Worker",
+                "administratorLogin": "citus",
+                "administratorLoginPassword": "[parameters('administratorLoginPassword')]",
+                "publicIpAddressRequested": "false",
+                "serverEdition": "MemoryOptimized",
+                "VCores": "[parameters('workerVcores')]",
+                "storageQuotaInMb": "[parameters('workerStorageSizeMB')]",
+                "serverGroupName": "[variables('serverGroupName')]",
+                "standbyCount": "[parameters('standbyCount')]",
+                "VnetInjArgs": "[if(empty(parameters('vnetData')), json('null'), variables('finalVnetData'))]"
+            },
+            "dependsOn": [
+                "[concat('Microsoft.DBforPostgreSQL/serverGroups/', variables('serverGroupName'))]"
+            ]
+        }
+    ],
+    "outputs": {
+        "coordinator hostname": {
+            "type": "string",
+            "value": "[reference(concat('Microsoft.DBforPostgreSQL/serversv2/', variables('coordName')), variables('api')).fullyQualifiedDomainName]"
+        }
+    }
+}

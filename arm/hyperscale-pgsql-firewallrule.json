@@ -1,0 +1,47 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "coordName": {
+            "type": "string"
+        },
+        "firewallRulesName": {
+            "type": "string"
+        },
+        "firewallRulesStartIPAddress": {
+            "type": "string"
+        },
+        "firewallRulesEndIPAddress": {
+            "type": "string"
+        }
+    },
+    "variables": {
+        "api": "2018-03-29-privatepreview",
+        "coordName": "[parameters('coordName')]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2019-08-01",
+            "name": "[parameters('firewallRulesName')]",
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "http://schema.management.azure.com/schemas/2014-04-01-preview/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "resources": [
+                        {
+                            "type": "Microsoft.DBforPostgreSQL/serversv2/firewallRules",
+                            "name": "[concat(variables('coordName'),'/',parameters('firewallRulesName'))]",
+                            "apiVersion": "[variables('api')]",
+                            "properties": {
+                                "StartIpAddress": "[parameters('firewallRulesStartIPAddress')]",
+                                "EndIpAddress": "[parameters('firewallRulesEndIPAddress')]"
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+}
